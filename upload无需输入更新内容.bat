@@ -1,6 +1,6 @@
 
 @echo off
 git add .
-git commit -m "常规更新"
+git commit -m "update"
 git push -u origin main
 pause
