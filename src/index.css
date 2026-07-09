@@ -1,0 +1,240 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+/* stylelint-disable */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+
+
+/* 智能挪车系统 设计系统 - 参考图驱动
+   Vibe: iOS App Card UI × Gradient Sky
+   蓝/紫渐变背景 + 白色大圆角浮层卡片
+*/
+
+@layer base {
+  :root {
+    --radius: 1.25rem; /* 20px 大圆角，呼应参考图 */
+
+    /* 核心色彩 */
+    --primary: 218 100% 58%;          /* #2B7FFF 蓝 */
+    --primary-foreground: 0 0% 100%;
+    --accent: 148 76% 42%;            /* #18C16E 绿 */
+    --accent-foreground: 0 0% 100%;
+    --secondary: 251 42% 61%;         /* #7C6FCD 紫 */
+    --secondary-foreground: 0 0% 100%;
+
+    /* 背景 & 前景 */
+    --background: 205 82% 75%;        /* #87C9F7 天蓝 */
+    --foreground: 237 46% 14%;        /* #1A1A2E 深色 */
+
+    /* 卡片 */
+    --card: 0 0% 100%;
+    --card-foreground: 237 46% 14%;
+
+    /* 辅助 */
+    --muted: 210 80% 95%;             /* #EBF4FF 极淡蓝 */
+    --muted-foreground: 218 40% 50%;
+    --border: 210 70% 87%;            /* #D4E8FF */
+    --input: 210 70% 87%;
+    --ring: 218 100% 58%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 237 46% 14%;
+
+    /* 功能色 */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 148 76% 42%;
+    --warning: 38 92% 50%;
+    --info: 218 100% 58%;
+
+    /* 渐变 */
+    --gradient-primary: linear-gradient(135deg, #2B7FFF 0%, #60B0FF 100%);
+    --gradient-secondary: linear-gradient(135deg, #7C6FCD 0%, #9B8EDD 100%);
+    --gradient-success: linear-gradient(135deg, #18C16E 0%, #34D58A 100%);
+    --gradient-bg-blue: linear-gradient(160deg, #60C8F5 0%, #3B9EE2 50%, #5B7FE8 100%);
+    --gradient-bg-purple: linear-gradient(160deg, #9B8EDD 0%, #7C6FCD 50%, #5B4FB8 100%);
+    --gradient-card: none;
+    --gradient-background: var(--gradient-bg-blue);
+
+    /* 阴影 */
+    --shadow-card: 0 8px 32px rgba(30, 60, 120, 0.12);
+    --shadow-hover: 0 12px 40px rgba(30, 60, 120, 0.18);
+
+    /* 侧边栏（不使用，保留兼容） */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 218 100% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 80% 95%;
+    --sidebar-accent-foreground: 237 46% 14%;
+    --sidebar-border: 210 70% 87%;
+    --sidebar-ring: 218 100% 58%;
+
+    /* 图表色 */
+    --chart-1: 218 100% 58%;
+    --chart-2: 148 76% 42%;
+    --chart-3: 251 42% 61%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 0 84% 60%;
+  }
+
+  /* 暗色模式适配 */
+  .dark {
+    --background: 237 46% 14%;
+    --foreground: 210 40% 95%;
+    --card: 237 40% 18%;
+    --card-foreground: 210 40% 95%;
+    --popover: 237 40% 18%;
+    --popover-foreground: 210 40% 95%;
+    --primary: 218 90% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 251 35% 50%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 237 30% 22%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 148 65% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 237 30% 25%;
+    --input: 237 30% 25%;
+    --ring: 218 90% 65%;
+    --sidebar-background: 237 40% 12%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 218 90% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 237 30% 20%;
+    --sidebar-accent-foreground: 210 40% 90%;
+    --sidebar-border: 237 30% 22%;
+    --sidebar-ring: 218 90% 65%;
+    --chart-1: 218 90% 65%;
+    --chart-2: 148 65% 50%;
+    --chart-3: 251 35% 65%;
+    --chart-4: 38 80% 60%;
+    --chart-5: 0 70% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "PingFang SC", "Noto Sans SC", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+}
+
+/* 渐变背景页面 */
+.page-bg-blue {
+  background: var(--gradient-bg-blue);
+  min-height: 100dvh;
+}
+
+.page-bg-purple {
+  background: var(--gradient-bg-purple);
+  min-height: 100dvh;
+}
+
+/* 渐变按钮 */
+.btn-gradient-primary {
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.btn-gradient-primary:hover { opacity: 0.92; }
+.btn-gradient-primary:active { transform: scale(0.97); opacity: 0.85; }
+
+.btn-gradient-success {
+  background: var(--gradient-success);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.btn-gradient-success:hover { opacity: 0.92; }
+.btn-gradient-success:active { transform: scale(0.97); opacity: 0.85; }
+
+/* 浮层卡片 */
+.floating-card {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+/* 快捷标签胶囊 */
+.tag-pill {
+  background: hsl(210 80% 93%);
+  border-radius: 999px;
+  border: 1.5px solid hsl(210 70% 82%);
+  color: hsl(218 70% 40%);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tag-pill:hover { background: hsl(218 80% 88%); }
+.tag-pill.selected {
+  background: hsl(218 100% 58% / 0.15);
+  border-color: hsl(218 100% 58%);
+  color: hsl(218 100% 45%);
+}
+.tag-pill:active { transform: scale(0.95); }
+
+/* 入场动画 */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-card-enter {
+  animation: card-enter 0.3s ease-out both;
+}
+
+/* 波动动画（挥手图标）*/
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  20%  { transform: rotate(-20deg); }
+  40%  { transform: rotate(15deg); }
+  60%  { transform: rotate(-10deg); }
+  80%  { transform: rotate(8deg); }
+}
+.animate-wave {
+  display: inline-block;
+  animation: wave 1.8s ease-in-out infinite;
+  transform-origin: 70% 80%;
+}
+
+/* 脉冲动画（位置图标）*/
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%  { transform: scale(1.2); opacity: 0.7; }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
