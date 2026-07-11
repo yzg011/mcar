@@ -232,34 +232,6 @@ export default function OwnerPage() {
         </div>
       )}
 
-      {/* 确认按钮 */}
-      <div
-        className="w-full max-w-sm animate-card-enter"
-        style={{ animationDelay: '200ms' }}
-      >
-        <button
-          onClick={handleConfirm}
-          disabled={confirming || isAcknowledged}
-          className="btn-gradient-success w-full py-4 rounded-2xl text-lg font-bold flex items-center justify-center gap-2 disabled:opacity-70"
-          type="button"
-        >
-          {confirming ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : isAcknowledged ? (
-            <CheckCircle2 className="w-5 h-5" />
-          ) : (
-            <span>🚀</span>
-          )}
-          {confirming ? '确认中…' : isAcknowledged ? '已确认出发' : '我已知晓，正在前往'}
-        </button>
-      </div>
-
-      <p className="text-white/50 text-xs text-center max-w-xs mt-4">
-        点击确认后，对方将实时收到您的出发通知
-      </p>
-    </div>
-  );
-}
 
       {/* 导航卡片 */}
       {hasLocation && (
@@ -293,3 +265,35 @@ export default function OwnerPage() {
           </div>
         </div>
       )}
+
+
+      {/* 确认按钮 */}
+      <div
+        className="w-full max-w-sm animate-card-enter"
+        style={{ animationDelay: '200ms' }}
+      >
+        <button
+          onClick={handleConfirm}
+          disabled={confirming || isAcknowledged}
+          className="btn-gradient-success w-full py-4 rounded-2xl text-lg font-bold flex items-center justify-center gap-2 disabled:opacity-70"
+          type="button"
+        >
+          {confirming ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : isAcknowledged ? (
+            <CheckCircle2 className="w-5 h-5" />
+          ) : (
+            <span>🚀</span>
+          )}
+          {confirming ? '确认中…' : isAcknowledged ? '已确认出发' : '我已知晓，正在前往'}
+        </button>
+      </div>
+
+      <p className="text-white/50 text-xs text-center max-w-xs mt-4">
+        点击确认后，对方将实时收到您的出发通知
+      </p>
+    </div>
+  );
+}
+
+
