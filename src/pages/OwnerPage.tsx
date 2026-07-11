@@ -194,38 +194,7 @@ export default function OwnerPage() {
         )}
       </div>
 
-      {/* 导航卡片 */}
-      {hasLocation && (
-        <div
-          className="floating-card w-full max-w-sm p-5 animate-card-enter mb-4"
-          style={{ animationDelay: '100ms' }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <MapPin className="w-4 h-4 text-primary" />
-            <p className="text-sm font-semibold text-foreground">导航到对方位置</p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={openGaode}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-              style={{ background: '#3B9EFF', color: '#fff' }}
-              type="button"
-            >
-              <span className="text-base">🗺</span>
-              高德地图
-            </button>
-            <button
-              onClick={openAppleMaps}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-              style={{ background: '#1C1C1E', color: '#fff' }}
-              type="button"
-            >
-              <span className="text-base">🍎</span>
-              Apple Maps
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* 车主回复留言卡片（未确认时显示） */}
       {!isAcknowledged && (
@@ -291,3 +260,36 @@ export default function OwnerPage() {
     </div>
   );
 }
+
+      {/* 导航卡片 */}
+      {hasLocation && (
+        <div
+          className="floating-card w-full max-w-sm p-5 animate-card-enter mb-4"
+          style={{ animationDelay: '100ms' }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="w-4 h-4 text-primary" />
+            <p className="text-sm font-semibold text-foreground">导航到对方位置</p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={openGaode}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+              style={{ background: '#3B9EFF', color: '#fff' }}
+              type="button"
+            >
+              <span className="text-base">🗺</span>
+              高德地图
+            </button>
+            <button
+              onClick={openAppleMaps}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+              style={{ background: '#1C1C1E', color: '#fff' }}
+              type="button"
+            >
+              <span className="text-base">🍎</span>
+              Apple Maps
+            </button>
+          </div>
+        </div>
+      )}
