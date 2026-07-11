@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Bell, Loader2, AlertCircle, CheckCircle2, ArrowLeft, RefreshCw, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/db/supabase';
-import { upsertRoom, getRoomByCode, sendBarkNotification } from '@/services/api';
+import { upsertRoom, getRoomByCode, sendBarkNotification, extractBarkCode } from '@/services/api';
 import type { MoveCarRoom, LocationInfo, QuickTag } from '@/types/types';
 
 const QUICK_TAGS: QuickTag[] = [
@@ -14,7 +14,10 @@ const QUICK_TAGS: QuickTag[] = [
 ];
 
 export default function NotifyPage() {
-  const { barkCode } = useParams<{ barkCode: string }>();
+  const { barkCode: rawBarkCode } = useParams<{ barkCode: string }>();
+  const barkCode = rawBarkCode ? decodeURIComponent(rawBarkCode) : '';
+  // 纯接口码（去掉自建服务器域名），用于 DB、Realtime、owner URL
+  const codeForDb = extractBarkCode(barkCode);
   const navigate = useNavigate();
 
   const [room, setRoom] = useState<MoveCarRoom | null>(null);
@@ -24,11 +27,6 @@ export default function NotifyPage() {
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [sending, setSending] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-
-  // 读取自定义推送 URL（URL 模式下由 HomePage 写入）
-  const customNotifyUrl = barkCode
-    ? (sessionStorage.getItem(`notifyUrl_${barkCode}`) ?? undefined)
-    : undefined;
 
   // 获取定位
   const getLocation = useCallback(() => {
@@ -48,20 +46,20 @@ export default function NotifyPage() {
 
   // 加载当前请求状态（用于展示车主已确认的反馈）
   useEffect(() => {
-    if (!barkCode) return;
-    getRoomByCode(barkCode).then(({ data }) => setRoom(data));
-  }, [barkCode]);
+    if (!codeForDb) return;
+    getRoomByCode(codeForDb).then(({ data }) => setRoom(data));
+  }, [codeForDb]);
 
   // Realtime 监听车主确认
   useEffect(() => {
-    if (!barkCode) return;
+    if (!codeForDb) return;
     const channel = supabase
-      .channel(`notify-${barkCode}`)
+      .channel(`notify-${codeForDb}`)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'move_car_rooms',
-        filter: `room_code=eq.${barkCode}`,
+        filter: `room_code=eq.${codeForDb}`,
       }, (payload) => {
         const updated = payload.new as MoveCarRoom;
         setRoom(updated);
@@ -72,7 +70,7 @@ export default function NotifyPage() {
       .subscribe();
     channelRef.current = channel;
     return () => { channel.unsubscribe(); };
-  }, [barkCode]);
+  }, [codeForDb]);
 
   const toggleTag = (value: string) => {
     setSelectedTags((prev) =>
@@ -84,9 +82,12 @@ export default function NotifyPage() {
     if (!barkCode || sending) return;
     setSending(true);
     try {
-      // 1. 写入 / 刷新 DB 记录
+      // 提取纯接口码（自建服务器取第一个路径段），用于 DB 和 owner 页 URL
+      const codeForDb = extractBarkCode(barkCode);
+
+      // 1. 写入 / 刷新 DB 记录（以纯接口码为唯一标识）
       const { data, error } = await upsertRoom({
-        bark_code: barkCode,
+        bark_code: codeForDb,
         message,
         tags: selectedTags,
         location_lat: location?.lat ?? null,
@@ -96,19 +97,18 @@ export default function NotifyPage() {
       if (error || !data) { toast.error('写入失败，请重试'); return; }
       setRoom(data);
 
-      // 2. 调用 Bark 完整接口，URL 指向车主确认页 /owner/:barkCode
+      // 2. 调用 Bark 完整接口（保留完整地址以支持自建服务器），owner URL 用纯接口码
       const tagStr = selectedTags.length > 0 ? `[${selectedTags.join('/')}] ` : '';
       const bodyText = message
         ? `${tagStr}${message}`
         : `${tagStr}有人请您挪车，请点击查看并确认`;
-      const ownerUrl = `${window.location.origin}/owner/${barkCode}`;
+      const ownerUrl = `${window.location.origin}/owner/${encodeURIComponent(codeForDb)}`;
 
       const { success, error: barkError } = await sendBarkNotification({
-        bark_code: barkCode,
+        bark_code: barkCode,        // 完整地址（用于 Bark 推送）
         title: '🚗 挪车请求',
         body: bodyText,
         url: ownerUrl,
-        customBaseUrl: customNotifyUrl,
       });
 
       if (success) {

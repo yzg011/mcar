@@ -14,7 +14,8 @@ const OWNER_QUICK_REPLIES = [
 ];
 
 export default function OwnerPage() {
-  const { barkCode } = useParams<{ barkCode: string }>();
+  const { barkCode: rawBarkCode } = useParams<{ barkCode: string }>();
+  const barkCode = rawBarkCode ? decodeURIComponent(rawBarkCode) : '';
   const navigate = useNavigate();
 
   const [room, setRoom] = useState<MoveCarRoom | null>(null);
