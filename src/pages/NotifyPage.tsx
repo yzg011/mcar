@@ -25,6 +25,11 @@ export default function NotifyPage() {
   const [sending, setSending] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
+  // 读取自定义推送 URL（URL 模式下由 HomePage 写入）
+  const customNotifyUrl = barkCode
+    ? (sessionStorage.getItem(`notifyUrl_${barkCode}`) ?? undefined)
+    : undefined;
+
   // 获取定位
   const getLocation = useCallback(() => {
     if (!navigator.geolocation) { setLocationStatus('error'); return; }
@@ -103,6 +108,7 @@ export default function NotifyPage() {
         title: '🚗 挪车请求',
         body: bodyText,
         url: ownerUrl,
+        customBaseUrl: customNotifyUrl,
       });
 
       if (success) {
