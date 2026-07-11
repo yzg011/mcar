@@ -2,17 +2,46 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 
+// 从 URL 中提取推送接口码（取路径第一段非空片段）
+// 例：https://api.day.app/AbCdEf/ → AbCdEf
+function extractCodeFromUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    const segment = u.pathname.split('/').find((s) => s.length > 0);
+    return segment ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// 判断输入是否为合法 URL
+function isUrl(raw: string): boolean {
+  try { new URL(raw); return true; } catch { return false; }
+}
+
+const STORAGE_KEY = (code: string) => `notifyUrl_${code}`;
+
 export default function HomePage() {
   const navigate = useNavigate();
-  const [barkCode, setBarkCode] = useState('');
+  const [input, setInput] = useState('');
   const [error, setError] = useState('');
 
   const handleNotify = () => {
-    const code = barkCode.trim();
-    if (!code) { setError('请输入 Bark 接口码'); return; }
+    const raw = input.trim();
+    if (!raw) { setError('请输入推送接口码或完整推送 URL'); return; }
     setError('');
-    // encodeURIComponent 确保完整 URL（含斜杠）也能安全放入路由参数
-    navigate(`/notify/${encodeURIComponent(code)}`);
+
+    if (isUrl(raw)) {
+      const code = extractCodeFromUrl(raw);
+      if (!code) { setError('无法从 URL 中提取接口码，请检查格式'); return; }
+      // 存储完整 URL，供 NotifyPage 发送时使用
+      sessionStorage.setItem(STORAGE_KEY(code), raw);
+      navigate(`/notify/${code}`);
+    } else {
+      // 普通接口码，移除可能残留的自定义 URL
+      sessionStorage.removeItem(STORAGE_KEY(raw));
+      navigate(`/notify/${raw}`);
+    }
   };
 
   return (
@@ -29,8 +58,9 @@ export default function HomePage() {
           <span className="text-5xl" role="img" aria-label="car">🚗</span>
         </div>
         <h1 className="text-3xl font-bold text-white drop-shadow">智能挪车</h1>
-        <p className="text-white/75 text-sm">基于 Bark 实时推送，一键通知车主</p>
+        <p className="text-white/75 text-sm">实时推送，一键通知车主</p>
       </div>
+
       {/* 被堵车方入口 */}
       <div
         className="floating-card w-full max-w-sm p-6 animate-card-enter"
@@ -46,18 +76,18 @@ export default function HomePage() {
           <div>
             <h2 className="font-bold text-foreground text-base">我被堵了</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              输入车主 Bark 码，一键推送挪车通知
+              输入车主推送接口码或完整推送 URL
             </p>
           </div>
         </div>
 
         <input
           type="text"
-          value={barkCode}
-          onChange={(e) => { setBarkCode(e.target.value); setError(''); }}
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setError(''); }}
           onKeyDown={(e) => e.key === 'Enter' && handleNotify()}
-          placeholder="接口码 或 自建服务器完整 URL"
-          className="w-full px-4 py-3 rounded-xl border outline-none text-foreground text-base font-mono"
+          placeholder="接口码 或 https://api.day.app/xxx/"
+          className="w-full px-4 py-3 rounded-xl border outline-none text-foreground text-sm font-mono"
           style={{
             background: 'hsl(210 80% 95%)',
             borderColor: error ? 'hsl(0 84% 60%)' : 'hsl(210 70% 87%)',
@@ -74,6 +104,7 @@ export default function HomePage() {
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
       {/* 使用说明 */}
       <div
         className="floating-card w-full max-w-sm p-4 animate-card-enter"
@@ -81,15 +112,15 @@ export default function HomePage() {
       >
         <p className="text-xs font-semibold text-foreground mb-2">使用说明</p>
         <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
-          <li>车主安装 Bark App，获取专属接口码并告知他人</li>
-          <li>支持自建服务器：直接粘贴完整 URL（如 https://bk.example.com/xxxx/）</li>
-          <li>被堵方输入接口码或 URL，点击呼叫发送推送通知</li>
+          <li>车主安装推送 App（如 Bark），获取推送接口码或完整 URL</li>
+          <li>被堵方输入接口码或完整 URL，点击呼叫发送推送通知</li>
           <li>车主手机收到通知后，点击链接进入确认页面</li>
           <li>车主点击"正在前往"，被堵方实时收到确认提醒</li>
         </ol>
       </div>
+
       <p className="text-white/50 text-xs text-center max-w-xs animate-card-enter" style={{ animationDelay: '220ms' }}>
-        无需注册，Bark 码即身份，安全可靠
+        无需注册，接口码即身份，安全可靠
       </p>
     </div>
   );

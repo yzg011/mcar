@@ -1,24 +1,6 @@
 import { supabase } from '@/db/supabase';
 import type { MoveCarRoom } from '@/types/types';
 
-/**
- * 从 Bark 输入中提取纯接口码（不含域名/协议），用于 DB 存储与 owner 页 URL。
- * - 纯接口码（如 mnrbXwwBoF4cJPhR3Vw5jf）→ 原样返回
- * - 完整自建服务器 URL（如 https://bk.z2m.store/mnrbXwwBoF4cJPhR3Vw5jf/）
- *   → 取第一个路径段，即 mnrbXwwBoF4cJPhR3Vw5jf
- */
-export function extractBarkCode(input: string): string {
-  if (!input.startsWith('http://') && !input.startsWith('https://')) return input;
-  try {
-    const { pathname } = new URL(input);
-    // pathname 形如 /mnrbXwwBoF4cJPhR3Vw5jf/ → 取第一个非空段
-    const code = pathname.split('/').find((seg) => seg.length > 0) ?? input;
-    return code;
-  } catch {
-    return input;
-  }
-}
-
 // 以 bark_code 作为唯一标识，创建或重置挪车房间
 export async function upsertRoom(params: {
   bark_code: string;
@@ -81,30 +63,36 @@ export async function updateRoomStatus(
   return { error: null };
 }
 
-// 调用 Bark 推送通知（支持官方服务器和自建服务器）
-// bark_code 可以是：
-//   - 纯接口码：mnrbXwwBoF4cJPhR3Vw5jf  → 使用 https://api.day.app/{code}/
-//   - 完整服务器 URL：https://bk.example.com/mnrbXwwBoF4cJPhR3Vw5jf/  → 直接使用
+// 发送推送通知（通过 Edge Function 服务端代理，避免 CORS）
+// - customBaseUrl 存在：直接用该 URL 作为 base，拼接 title/body（兼容任意推送服务）
+// - customBaseUrl 不存在：使用标准 Bark API
 export async function sendBarkNotification(params: {
   bark_code: string;
   title: string;
   body: string;
   url?: string;
+  customBaseUrl?: string;
 }): Promise<{ success: boolean; error: string | null }> {
   try {
     const encodedTitle = encodeURIComponent(params.title);
     const encodedBody = encodeURIComponent(params.body);
-    const querySuffix = params.url ? `?url=${encodeURIComponent(params.url)}` : '';
+    const urlParam = params.url ? `?url=${encodeURIComponent(params.url)}` : '';
 
-    // 判断是否为自建服务器完整 URL
-    const isFullUrl = params.bark_code.startsWith('http://') || params.bark_code.startsWith('https://');
-    const base = isFullUrl
-      ? params.bark_code.replace(/\/$/, '')   // 去掉末尾斜杠后拼接
-      : `https://api.day.app/${params.bark_code}`;
+    let notifyUrl: string;
+    if (params.customBaseUrl) {
+      const base = params.customBaseUrl.replace(/\/+$/, '');
+      notifyUrl = `${base}/${encodedTitle}/${encodedBody}${urlParam}`;
+    } else {
+      notifyUrl = `https://api.day.app/${params.bark_code}/${encodedTitle}/${encodedBody}${urlParam}`;
+    }
 
-    const barkUrl = `${base}/${encodedTitle}/${encodedBody}${querySuffix}`;
-    const res = await fetch(barkUrl);
-    if (!res.ok) return { success: false, error: `Bark 响应: ${res.status}` };
+    // 通过 Edge Function 代理请求，规避第三方服务的 CORS 限制
+    const { data, error } = await supabase.functions.invoke('send-notification', {
+      body: { notifyUrl },
+    });
+
+    if (error) return { success: false, error: error.message };
+    if (!data?.success) return { success: false, error: data?.error ?? '推送失败' };
     return { success: true, error: null };
   } catch (e) {
     return { success: false, error: String(e) };
