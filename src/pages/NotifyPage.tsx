@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, Bell, Loader2, AlertCircle, CheckCircle2, ArrowLeft, RefreshCw, MessageSquare } from 'lucide-react';
+import { MapPin, Bell, Loader2, AlertCircle, CheckCircle2, ArrowLeft, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/db/supabase';
-import { upsertRoom, getRoomByCode, sendBarkNotification } from '@/services/api';
-import type { MoveCarRoom, LocationInfo, QuickTag } from '@/types/types';
+import { sendTgNotification, checkTgStatus } from '@/services/api';
+import { parseTgCode } from '@/types/types';
+import type { LocationInfo, QuickTag } from '@/types/types';
 
 const QUICK_TAGS: QuickTag[] = [
   { label: '挡路', emoji: '🚧', value: '挡路' },
@@ -13,17 +13,26 @@ const QUICK_TAGS: QuickTag[] = [
   { label: '加急', emoji: '🙏', value: '加急' },
 ];
 
+// 轮询间隔（毫秒）
+const POLL_INTERVAL = 3000;
+
 export default function NotifyPage() {
   const { barkCode } = useParams<{ barkCode: string }>();
   const navigate = useNavigate();
 
-  const [room, setRoom] = useState<MoveCarRoom | null>(null);
+  const target = barkCode ? parseTgCode(decodeURIComponent(barkCode)) : null;
+
   const [message, setMessage] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [location, setLocation] = useState<LocationInfo | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [sending, setSending] = useState(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const [sent, setSent] = useState(false);
+
+  // 车主状态（轮询 TG getUpdates 派生）
+  const [confirmed, setConfirmed] = useState(false);
+  const [ownerMessage, setOwnerMessage] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 获取定位
   const getLocation = useCallback(() => {
@@ -41,33 +50,25 @@ export default function NotifyPage() {
 
   useEffect(() => { getLocation(); }, [getLocation]);
 
-  // 加载当前请求状态（用于展示车主已确认的反馈）
+  // 发送后轮询车主确认状态
   useEffect(() => {
-    if (!barkCode) return;
-    getRoomByCode(barkCode).then(({ data }) => setRoom(data));
-  }, [barkCode]);
-
-  // Realtime 监听车主确认
-  useEffect(() => {
-    if (!barkCode) return;
-    const channel = supabase
-      .channel(`notify-${barkCode}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'move_car_rooms',
-        filter: `room_code=eq.${barkCode}`,
-      }, (payload) => {
-        const updated = payload.new as MoveCarRoom;
-        setRoom(updated);
-        if (updated.status === 'owner_acknowledged') {
-          toast.success('🎉 车主已确认，正在前往挪车！');
-        }
-      })
-      .subscribe();
-    channelRef.current = channel;
-    return () => { channel.unsubscribe(); };
-  }, [barkCode]);
+    if (!sent || !target) return;
+    const poll = async () => {
+      const { data } = await checkTgStatus({
+        token: target.token,
+        chatId: target.chatId,
+        code: decodeURIComponent(barkCode ?? ''),
+      });
+      if (data) {
+        if (data.confirmed && !confirmed) toast.success('🎉 车主已确认，正在前往挪车！');
+        setConfirmed(data.confirmed);
+        setOwnerMessage(data.ownerMessage);
+      }
+    };
+    poll();
+    pollRef.current = setInterval(poll, POLL_INTERVAL);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [sent, target, barkCode, confirmed]);
 
   const toggleTag = (value: string) => {
     setSelectedTags((prev) =>
@@ -76,46 +77,49 @@ export default function NotifyPage() {
   };
 
   const handleSend = async () => {
-    if (!barkCode || sending) return;
+    if (!target || !barkCode || sending) return;
     setSending(true);
     try {
-      // 1. 写入 / 刷新 DB 记录
-      const { data, error } = await upsertRoom({
-        bark_code: barkCode,
-        message,
-        tags: selectedTags,
-        location_lat: location?.lat ?? null,
-        location_lng: location?.lng ?? null,
-        location_name: location?.name ?? '',
-      });
-      if (error || !data) { toast.error('写入失败，请重试'); return; }
-      setRoom(data);
-
-      // 2. 调用 Bark 完整接口，URL 指向车主确认页 /owner/:barkCode
+      const code = decodeURIComponent(barkCode);
       const tagStr = selectedTags.length > 0 ? `[${selectedTags.join('/')}] ` : '';
       const bodyText = message
         ? `${tagStr}${message}`
-        : `${tagStr}有人请您挪车，请点击查看并确认`;
-      const ownerUrl = `${window.location.origin}/owner/${barkCode}`;
+        : `${tagStr}有人请您挪车，请尽快前往处理`;
 
-      const { success, error: barkError } = await sendBarkNotification({
-        bark_code: barkCode,
-        title: '🚗 挪车请求',
-        body: bodyText,
-        url: ownerUrl,
+      // OwnerPage 链接，query 携带留言/位置详情
+      const params = new URLSearchParams();
+      if (message) params.set('msg', message);
+      if (selectedTags.length > 0) params.set('tags', selectedTags.join(','));
+      if (location) { params.set('lat', String(location.lat)); params.set('lng', String(location.lng)); }
+      const qs = params.toString();
+      const ownerUrl = `${window.location.origin}/owner/${barkCode}${qs ? `?${qs}` : ''}`;
+
+      // TG 通知正文（含位置链接）
+      const locLine = location
+        ? `\n📍 位置：https://maps.google.com/?q=${location.lat},${location.lng}`
+        : '';
+      const tgText = `🚗 挪车请求\n${bodyText}${locLine}`;
+
+      const { success, error } = await sendTgNotification({
+        token: target.token,
+        chatId: target.chatId,
+        code,
+        text: tgText,
+        ownerUrl,
       });
 
       if (success) {
-        toast.success('Bark 通知已推送到车主手机！');
+        setSent(true);
+        toast.success('TG 通知已推送到车主手机！');
       } else {
-        toast.warning(`已记录请求，但 Bark 推送失败：${barkError}`);
+        toast.error(`推送失败：${error}`);
       }
     } finally {
       setSending(false);
     }
   };
 
-  const isAcknowledged = room?.status === 'owner_acknowledged';
+  const code = barkCode ? decodeURIComponent(barkCode) : '';
 
   return (
     <div className="page-bg-blue flex flex-col items-center justify-start px-4 py-8 min-h-dvh">
@@ -129,13 +133,15 @@ export default function NotifyPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-white/60 text-xs">Bark 接口码</p>
-          <p className="text-white font-mono font-semibold text-sm truncate">{barkCode}</p>
+          <p className="text-white/60 text-xs">Chat ID</p>
+          <p className="text-white font-mono font-semibold text-sm truncate">
+            {target ? target.chatId : code}
+          </p>
         </div>
-        {room && (
+        {sent && (
           <div className="flex items-center gap-1">
-            <RefreshCw className="w-3 h-3 text-white/60" />
-            <span className="text-white/60 text-xs">实时</span>
+            <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#18C16E' }} />
+            <span className="text-white/60 text-xs">监听中</span>
           </div>
         )}
       </div>
@@ -155,11 +161,11 @@ export default function NotifyPage() {
           <span className="text-3xl">🚗</span>
         </div>
         <h1 className="text-xl font-bold text-foreground">呼叫车主挪车</h1>
-        <p className="text-xs text-muted-foreground">通知将通过 Bark 推送到车主手机</p>
+        <p className="text-xs text-muted-foreground">通知将通过 TG 机器人推送到车主手机</p>
       </div>
 
-      {/* 车主已确认状态横幅（在标题卡下方、留言卡上方） */}
-      {isAcknowledged && (
+      {/* 车主已确认状态横幅（标题卡下方、留言卡上方） */}
+      {confirmed && (
         <div
           className="floating-card w-full max-w-sm px-4 py-3 flex flex-col gap-2 animate-card-enter mb-4"
           style={{ border: '2px solid #18C16E' }}
@@ -172,13 +178,13 @@ export default function NotifyPage() {
             </div>
           </div>
           {/* 车主回复留言 */}
-          {room?.owner_message && (
+          {ownerMessage && (
             <div
               className="flex items-start gap-2 rounded-xl px-3 py-2 mt-1"
               style={{ background: 'hsl(148 60% 93%)' }}
             >
               <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#18C16E' }} />
-              <p className="text-xs text-foreground">{room.owner_message}</p>
+              <p className="text-xs text-foreground">{ownerMessage}</p>
             </div>
           )}
         </div>
@@ -193,7 +199,7 @@ export default function NotifyPage() {
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="输入留言内容，将附在通知正文里…"
+          placeholder="输入留言内容，将附在 TG 通知正文里…"
           className="w-full resize-none bg-transparent outline-none text-foreground placeholder:text-muted-foreground text-sm min-h-[72px]"
           maxLength={200}
         />
@@ -257,7 +263,9 @@ export default function NotifyPage() {
       </div>
 
       <p className="text-white/50 text-xs text-center max-w-xs mt-4">
-        点击后将调用 Bark 接口向车主手机推送通知，车主点击通知即可跳转确认页
+        {sent
+          ? '已通知车主，正在实时监听 TG 回复，车主确认或回复消息后将显示在上方'
+          : '点击后将通过 TG 机器人向车主推送通知，车主点击通知中的按钮即可确认'}
       </p>
     </div>
   );

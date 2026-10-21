@@ -1,18 +1,3 @@
-// 挪车房间类型
-export interface MoveCarRoom {
-  id: string;
-  room_code: string;
-  message: string;
-  tags: string[];
-  location_lat: number | null;
-  location_lng: number | null;
-  location_name: string;
-  status: 'waiting' | 'owner_acknowledged' | 'completed';
-  owner_message: string;   // 车主回复留言（可选）
-  created_at: string;
-  updated_at: string;
-}
-
 // 位置信息
 export interface LocationInfo {
   lat: number;
@@ -25,4 +10,26 @@ export interface QuickTag {
   label: string;
   emoji: string;
   value: string;
+}
+
+// TG 消息状态（由 getUpdates 轮询派生，无数据库）
+export interface TgRoomStatus {
+  confirmed: boolean;
+  ownerMessage: string | null;
+}
+
+// 解析组合码 token@chatId
+export interface TgTarget {
+  token: string;
+  chatId: string;
+}
+
+export function parseTgCode(code: string): TgTarget | null {
+  const idx = code.lastIndexOf('@');
+  if (idx <= 0 || idx === code.length - 1) return null;
+  return { token: code.slice(0, idx), chatId: code.slice(idx + 1) };
+}
+
+export function buildTgCode(token: string, chatId: string): string {
+  return `${token}@${chatId}`;
 }

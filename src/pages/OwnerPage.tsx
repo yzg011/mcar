@@ -1,110 +1,86 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, CheckCircle2, Loader2, ArrowLeft, MessageSquare } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { MapPin, CheckCircle2, Loader2, ArrowLeft, MessageSquare, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/db/supabase';
-import { getRoomByCode, updateRoomStatus } from '@/services/api';
-import type { MoveCarRoom } from '@/types/types';
+import { checkTgStatus, webConfirmTg } from '@/services/api';
+import { parseTgCode } from '@/types/types';
 
-const OWNER_QUICK_REPLIES = [
-  { label: '马上到', emoji: '🏃' },
-  { label: '5分钟', emoji: '⏱' },
-  { label: '稍等', emoji: '🙏' },
-  { label: '已挪好', emoji: '✅' },
-];
+// 轮询间隔（毫秒）
+const POLL_INTERVAL = 3000;
 
 export default function OwnerPage() {
   const { barkCode } = useParams<{ barkCode: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [room, setRoom] = useState<MoveCarRoom | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const code = barkCode ? decodeURIComponent(barkCode) : '';
+  const target = barkCode ? parseTgCode(code) : null;
+
+  // 详情来自通知链接的 query 参数
+  const msg = searchParams.get('msg') ?? '';
+  const tags = (searchParams.get('tags') ?? '').split(',').filter(Boolean);
+  const lat = searchParams.get('lat');
+  const lng = searchParams.get('lng');
+  const hasLocation = !!lat && !!lng;
+
+  const [confirmed, setConfirmed] = useState(false);
+  const [ownerMessage, setOwnerMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [ownerMessage, setOwnerMessage] = useState('');
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 加载房间
+  // 轮询确认状态（TG getUpdates 派生）
   useEffect(() => {
-    if (!barkCode) return;
-    (async () => {
-      const { data } = await getRoomByCode(barkCode);
-      if (!data) setNotFound(true);
-      else setRoom(data);
-      setLoading(false);
-    })();
-  }, [barkCode]);
+    if (!target) return;
+    const poll = async () => {
+      const { data } = await checkTgStatus({
+        token: target.token,
+        chatId: target.chatId,
+        code,
+      });
+      if (data) {
+        setConfirmed(data.confirmed);
+        setOwnerMessage(data.ownerMessage);
+      }
+    };
+    poll();
+    pollRef.current = setInterval(poll, POLL_INTERVAL);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [target, code]);
 
-  // Realtime 订阅
-  useEffect(() => {
-    if (!barkCode) return;
-    const channel = supabase
-      .channel(`owner-${barkCode}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'move_car_rooms',
-        filter: `room_code=eq.${barkCode}`,
-      }, (payload) => {
-        setRoom(payload.new as MoveCarRoom);
-      })
-      .subscribe();
-    channelRef.current = channel;
-    return () => { channel.unsubscribe(); };
-  }, [barkCode]);
-
-  const appendQuickReply = (label: string) => {
-    setOwnerMessage((prev) =>
-      prev ? `${prev} ${label}` : label
-    );
-  };
-
+  // 网页确认：向车主 TG 发送引导消息，点击按钮后通知等待方
   const handleConfirm = async () => {
-    if (!barkCode || confirming || room?.status === 'owner_acknowledged') return;
+    if (!target || confirming || confirmed) return;
     setConfirming(true);
-    const { error } = await updateRoomStatus(barkCode, 'owner_acknowledged', ownerMessage.trim());
-    if (error) {
-      toast.error('确认失败，请重试');
-      setConfirming(false);
-      return;
-    }
+    const { success, error } = await webConfirmTg({
+      token: target.token,
+      chatId: target.chatId,
+      code,
+    });
     setConfirming(false);
-    toast.success('已通知对方，请尽快前往挪车');
+    if (!success) { toast.error(`发送失败：${error}`); return; }
+    toast.success('确认消息已发送到您的 Telegram，请点击其中的按钮通知等待方');
   };
 
   const openGaode = () => {
-    if (!room?.location_lat || !room?.location_lng) { toast.error('对方位置不可用'); return; }
+    if (!lat || !lng) { toast.error('位置信息不可用'); return; }
     window.open(
-      `https://uri.amap.com/navigation?to=${room.location_lng},${room.location_lat},挪车位置&mode=car&src=myapp`,
+      `https://uri.amap.com/navigation?to=${lng},${lat},挪车位置&mode=car&src=myapp`,
       '_blank'
     );
   };
 
   const openAppleMaps = () => {
-    if (!room?.location_lat || !room?.location_lng) { toast.error('对方位置不可用'); return; }
-    window.open(
-      `http://maps.apple.com/?daddr=${room.location_lat},${room.location_lng}&dirflg=d`,
-      '_blank'
-    );
+    if (!lat || !lng) { toast.error('位置信息不可用'); return; }
+    window.open(`http://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`, '_blank');
   };
 
-  if (loading) {
-    return (
-      <div className="page-bg-purple flex items-center justify-center min-h-dvh">
-        <Loader2 className="w-10 h-10 text-white animate-spin" />
-      </div>
-    );
-  }
-
-  if (notFound) {
+  if (!target) {
     return (
       <div className="page-bg-purple flex flex-col items-center justify-center px-4 min-h-dvh gap-4">
         <div className="floating-card w-full max-w-sm p-8 flex flex-col items-center gap-3 animate-card-enter">
           <span className="text-5xl">🔍</span>
-          <h2 className="text-xl font-bold text-foreground">未找到挪车请求</h2>
-          <p className="text-sm text-muted-foreground text-center">
-            链接可能已过期，或请求尚未发出
-          </p>
+          <h2 className="text-xl font-bold text-foreground">链接无效</h2>
+          <p className="text-sm text-muted-foreground text-center">通知链接格式不正确</p>
           <button
             onClick={() => navigate('/')}
             className="btn-gradient-primary w-full py-3 rounded-2xl text-base font-bold mt-2"
@@ -116,9 +92,6 @@ export default function OwnerPage() {
       </div>
     );
   }
-
-  const isAcknowledged = room?.status === 'owner_acknowledged';
-  const hasLocation = room?.location_lat && room?.location_lng;
 
   return (
     <div className="page-bg-purple flex flex-col items-center justify-start px-4 py-8 min-h-dvh">
@@ -133,7 +106,7 @@ export default function OwnerPage() {
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-white/60 text-xs">车主确认页</p>
-          <p className="text-white font-mono font-semibold text-sm truncate">{barkCode}</p>
+          <p className="text-white font-mono font-semibold text-sm truncate">Chat ID: {target.chatId}</p>
         </div>
       </div>
 
@@ -144,20 +117,11 @@ export default function OwnerPage() {
       >
         <span className="text-6xl animate-wave" role="img" aria-label="wave">👋</span>
 
-        {isAcknowledged ? (
+        {confirmed ? (
           <>
             <CheckCircle2 className="w-10 h-10" style={{ color: '#18C16E' }} />
             <h1 className="text-xl font-bold text-foreground text-center">您已确认出发</h1>
             <p className="text-sm text-muted-foreground text-center">感谢您的配合，请尽快前往挪车</p>
-            {room?.owner_message && (
-              <div
-                className="w-full rounded-xl px-4 py-3 flex items-start gap-2"
-                style={{ background: 'hsl(148 60% 93%)' }}
-              >
-                <MessageSquare className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#18C16E' }} />
-                <p className="text-sm text-foreground">{room.owner_message}</p>
-              </div>
-            )}
           </>
         ) : (
           <>
@@ -167,14 +131,14 @@ export default function OwnerPage() {
         )}
 
         {/* 被堵方留言 & 标签展示 */}
-        {(room?.message || (room?.tags && room.tags.length > 0)) && (
+        {(msg || tags.length > 0) && (
           <div
             className="w-full rounded-xl p-3"
             style={{ background: 'hsl(210 80% 95%)' }}
           >
-            {room?.tags && room.tags.length > 0 && (
+            {tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
-                {room.tags.map((tag) => (
+                {tags.map((tag) => (
                   <span
                     key={tag}
                     className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
@@ -189,7 +153,18 @@ export default function OwnerPage() {
                 ))}
               </div>
             )}
-            {room?.message && <p className="text-sm text-foreground">{room.message}</p>}
+            {msg && <p className="text-sm text-foreground">{msg}</p>}
+          </div>
+        )}
+
+        {/* 车主留言回显 */}
+        {ownerMessage && (
+          <div
+            className="w-full rounded-xl px-4 py-3 flex items-start gap-2"
+            style={{ background: 'hsl(148 60% 93%)' }}
+          >
+            <MessageSquare className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#18C16E' }} />
+            <p className="text-sm text-foreground">{ownerMessage}</p>
           </div>
         )}
       </div>
@@ -227,39 +202,19 @@ export default function OwnerPage() {
         </div>
       )}
 
-      {/* 车主回复留言卡片（未确认时显示） */}
-      {!isAcknowledged && (
+      {/* 留言提示卡片 */}
+      {!confirmed && (
         <div
           className="floating-card w-full max-w-sm p-5 animate-card-enter mb-4"
           style={{ animationDelay: '150ms' }}
         >
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-2">
             <MessageSquare className="w-4 h-4 text-primary" />
-            <p className="text-sm font-semibold text-foreground">回复留言（可选）</p>
+            <p className="text-sm font-semibold text-foreground">回复留言</p>
           </div>
-
-          {/* 快捷回复标签 */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            {OWNER_QUICK_REPLIES.map((reply) => (
-              <button
-                key={reply.label}
-                onClick={() => appendQuickReply(reply.label)}
-                className="tag-pill"
-                type="button"
-              >
-                <span>{reply.emoji}</span>
-                <span>{reply.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <textarea
-            value={ownerMessage}
-            onChange={(e) => setOwnerMessage(e.target.value)}
-            placeholder="输入给对方的留言，点击确认后一并发送…"
-            className="w-full resize-none bg-transparent outline-none text-foreground placeholder:text-muted-foreground text-sm min-h-[64px]"
-            maxLength={200}
-          />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            直接在 Telegram 中回复通知消息，留言内容将实时显示给等待方；回复任意消息即视为确认出发。
+          </p>
         </div>
       )}
 
@@ -270,23 +225,23 @@ export default function OwnerPage() {
       >
         <button
           onClick={handleConfirm}
-          disabled={confirming || isAcknowledged}
+          disabled={confirming || confirmed}
           className="btn-gradient-success w-full py-4 rounded-2xl text-lg font-bold flex items-center justify-center gap-2 disabled:opacity-70"
           type="button"
         >
           {confirming ? (
             <Loader2 className="w-5 h-5 animate-spin" />
-          ) : isAcknowledged ? (
+          ) : confirmed ? (
             <CheckCircle2 className="w-5 h-5" />
           ) : (
-            <span>🚀</span>
+            <Send className="w-5 h-5" />
           )}
-          {confirming ? '确认中…' : isAcknowledged ? '已确认出发' : '我已知晓，正在前往'}
+          {confirming ? '发送中…' : confirmed ? '已确认出发' : '我已知晓，正在前往'}
         </button>
       </div>
 
       <p className="text-white/50 text-xs text-center max-w-xs mt-4">
-        点击确认后，对方将实时收到您的出发通知
+        点击后确认消息将发送到您的 Telegram，点击其中按钮即可通知等待方
       </p>
     </div>
   );
