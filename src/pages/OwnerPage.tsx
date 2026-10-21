@@ -1,12 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { MapPin, CheckCircle2, Loader2, ArrowLeft, MessageSquare, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { checkTgStatus, webConfirmTg } from '@/services/api';
+import { webConfirmTg } from '@/services/api';
 import { parseTgCode } from '@/types/types';
-
-// 轮询间隔（毫秒）
-const POLL_INTERVAL = 3000;
 
 export default function OwnerPage() {
   const { barkCode } = useParams<{ barkCode: string }>();
@@ -22,33 +19,11 @@ export default function OwnerPage() {
   const lat = searchParams.get('lat');
   const lng = searchParams.get('lng');
   const hasLocation = !!lat && !!lng;
-  // 发送时刻的 updates 基线，只统计此后的车主操作
-  const bsl = Number(searchParams.get('bsl') ?? '0') || 0;
 
+  // 车主页不轮询 getUpdates（避免与被堵方页面并发冲突），
+  // 点击网页确认按钮发送 TG 快捷按钮后即本地置为已确认
   const [confirmed, setConfirmed] = useState(false);
-  const [ownerMessage, setOwnerMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // 轮询确认状态（仅统计通知发送后、bsl 基线之后的 TG 操作）
-  useEffect(() => {
-    if (!target || !bsl) return;
-    const poll = async () => {
-      const { data } = await checkTgStatus({
-        token: target.token,
-        chatId: target.chatId,
-        code,
-        baseline: bsl,
-      });
-      if (data) {
-        setConfirmed(data.confirmed);
-        setOwnerMessage(data.ownerMessage);
-      }
-    };
-    poll();
-    pollRef.current = setInterval(poll, POLL_INTERVAL);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [target, code, bsl]);
 
   // 网页确认：向车主 TG 发送引导消息，点击按钮后通知等待方
   const handleConfirm = async () => {
@@ -158,17 +133,6 @@ export default function OwnerPage() {
               </div>
             )}
             {msg && <p className="text-sm text-foreground">{msg}</p>}
-          </div>
-        )}
-
-        {/* 车主留言回显 */}
-        {ownerMessage && (
-          <div
-            className="w-full rounded-xl px-4 py-3 flex items-start gap-2"
-            style={{ background: 'hsl(148 60% 93%)' }}
-          >
-            <MessageSquare className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#18C16E' }} />
-            <p className="text-sm text-foreground">{ownerMessage}</p>
           </div>
         )}
       </div>

@@ -51,7 +51,8 @@ export default function NotifyPage() {
 
   useEffect(() => { getLocation(); }, [getLocation]);
 
-  // 发送后轮询车主确认状态（基线之后的新消息才有效）
+  // 发送后轮询车主确认状态（基线之后的新消息才有效；一旦确认永不回退）
+  const confirmedRef = useRef(false);
   useEffect(() => {
     if (!sent || !target || baseline === null) return;
     const poll = async () => {
@@ -62,15 +63,20 @@ export default function NotifyPage() {
         baseline,
       });
       if (data) {
-        if (data.confirmed && !confirmed) toast.success('🎉 车主已确认，正在前往挪车！');
-        setConfirmed(data.confirmed);
-        setOwnerMessage(data.ownerMessage);
+        // 粘性确认：只有 false→true 的跳变，避免轮询抖动导致横幅闪烁
+        if (data.confirmed && !confirmedRef.current) {
+          confirmedRef.current = true;
+          setConfirmed(true);
+          toast.success('🎉 车主已确认，正在前往挪车！');
+        }
+        // 留言只更新不回退，保留车主最近一条回复
+        if (data.ownerMessage) setOwnerMessage(data.ownerMessage);
       }
     };
     poll();
     pollRef.current = setInterval(poll, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [sent, target, barkCode, baseline, confirmed]);
+  }, [sent, target, barkCode, baseline]);
 
   const toggleTag = (value: string) => {
     setSelectedTags((prev) =>
@@ -95,12 +101,11 @@ export default function NotifyPage() {
       } catch { /* 基线获取失败按 0 处理 */ }
       setBaseline(bs);
 
-      // OwnerPage 链接，query 携带留言/标签/位置详情 + 基线
+      // OwnerPage 链接，query 携带留言/标签/位置详情
       const params = new URLSearchParams();
       if (message) params.set('msg', message);
       if (selectedTags.length > 0) params.set('tags', selectedTags.join(','));
       if (location) { params.set('lat', String(location.lat)); params.set('lng', String(location.lng)); }
-      params.set('bsl', String(bs));
       const qs = params.toString();
       const ownerUrl = `${window.location.origin}/owner/${barkCode}${qs ? `?${qs}` : ''}`;
 
