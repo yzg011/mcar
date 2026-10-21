@@ -4,10 +4,10 @@ import type { TgRoomStatus } from '@/types/types';
 const TG_PROXY_BASE = 'https://tg.z2m.store';
 
 // 车主快捷回复按钮（callback_data 短标识，UTF-8 不超 64 字节）
-const QUICK_BUTTONS: Array<{ text: string; data: string }> = [
-  { text: '🚗 正在前往', data: 'confirm:马上到' },
-  { text: '⏱ 等我5分钟', data: 'confirm:等我5分钟' },
-  { text: '✅ 已挪好', data: 'confirm:已挪好' },
+const QUICK_BUTTONS: Array<{ text: string; callback_data: string }> = [
+  { text: '🚗 正在前往', callback_data: 'confirm:马上到' },
+  { text: '⏱ 等我5分钟', callback_data: 'confirm:等我5分钟' },
+  { text: '✅ 已挪好', callback_data: 'confirm:已挪好' },
 ];
 
 // 调用 Telegram Bot API（通过自建反代）
@@ -51,8 +51,8 @@ export async function sendTgNotification(params: {
       text: params.text,
       reply_markup: {
         inline_keyboard: [
-          QUICK_BUTTONS.slice(0, 2).map((b) => ({ text: b.text, callback_data: b.data })),
-          [{ ...QUICK_BUTTONS[2] }],
+          QUICK_BUTTONS.slice(0, 2),
+          [QUICK_BUTTONS[2]],
           [{ text: '📋 查看详情与导航', url: params.ownerUrl }],
         ],
       },
@@ -113,8 +113,8 @@ export async function webConfirmTg(params: {
       text: '您已在网页上确认出发，请点击下方按钮回复对方 👇',
       reply_markup: {
         inline_keyboard: [
-          QUICK_BUTTONS.slice(0, 2).map((b) => ({ text: b.text, callback_data: b.data })),
-          [{ ...QUICK_BUTTONS[2] }],
+          QUICK_BUTTONS.slice(0, 2),
+          [QUICK_BUTTONS[2]],
         ],
       },
     });
