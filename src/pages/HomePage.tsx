@@ -5,8 +5,28 @@ import { toast } from 'sonner';
 import QRCodeDataUrl from '@/components/ui/qrcodedataurl';
 import { buildTgCode } from '@/types/types';
 
+// 从 URL 中提取推送接口码（取路径第一段非空片段）
+// 例：https://api.day.app/AbCdEf/ → AbCdEf
+function extractCodeFromUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    const segment = u.pathname.split('/').find((s) => s.length > 0);
+    return segment ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// 判断输入是否为合法 URL
+function isUrl(raw: string): boolean {
+  try { new URL(raw); return true; } catch { return false; }
+}
+
+const STORAGE_KEY = (code: string) => `notifyUrl_${code}`;
+
 export default function HomePage() {
   const navigate = useNavigate();
+<<<<<<< HEAD
   const [token, setToken] = useState('');
   const [chatId, setChatId] = useState('');
   const [error, setError] = useState('');
@@ -19,6 +39,27 @@ export default function HomePage() {
     if (!/^-?\d+$/.test(c)) { setError('Chat ID 应为数字'); return; }
     setError('');
     navigate(`/notify/${encodeURIComponent(buildTgCode(t, c))}`);
+=======
+  const [input, setInput] = useState('');
+  const [error, setError] = useState('');
+
+  const handleNotify = () => {
+    const raw = input.trim();
+    if (!raw) { setError('请输入推送接口码或完整推送 URL'); return; }
+    setError('');
+
+    if (isUrl(raw)) {
+      const code = extractCodeFromUrl(raw);
+      if (!code) { setError('无法从 URL 中提取接口码，请检查格式'); return; }
+      // 存储完整 URL，供 NotifyPage 发送时使用
+      sessionStorage.setItem(STORAGE_KEY(code), raw);
+      navigate(`/notify/${code}`);
+    } else {
+      // 普通接口码，移除可能残留的自定义 URL
+      sessionStorage.removeItem(STORAGE_KEY(raw));
+      navigate(`/notify/${raw}`);
+    }
+>>>>>>> a682c5cb3cd6f789e8c557e08572281402e0f675
   };
 
   // 二维码内容：被堵方扫码直达呼叫页
@@ -74,7 +115,11 @@ export default function HomePage() {
           <span className="text-5xl" role="img" aria-label="car">🚗</span>
         </div>
         <h1 className="text-3xl font-bold text-white drop-shadow">智能挪车</h1>
+<<<<<<< HEAD
         <p className="text-white/75 text-sm">基于 Telegram 机器人，一键通知车主</p>
+=======
+        <p className="text-white/75 text-sm">实时推送，一键通知车主</p>
+>>>>>>> a682c5cb3cd6f789e8c557e08572281402e0f675
       </div>
 
       {/* 被堵车方入口 */}
@@ -92,11 +137,16 @@ export default function HomePage() {
           <div>
             <h2 className="font-bold text-foreground text-base">我被堵了</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
+<<<<<<< HEAD
               输入车主 TG 机器人信息，一键推送挪车通知
+=======
+              输入车主推送接口码或完整推送 URL
+>>>>>>> a682c5cb3cd6f789e8c557e08572281402e0f675
             </p>
           </div>
         </div>
 
+<<<<<<< HEAD
         <div className="flex flex-col gap-3">
           <div>
             <p className="text-xs font-semibold text-muted-foreground mb-1.5">Bot Token</p>
@@ -123,6 +173,21 @@ export default function HomePage() {
           </div>
         </div>
         {error && <p className="text-xs mt-2" style={{ color: 'hsl(0 84% 55%)' }}>{error}</p>}
+=======
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setError(''); }}
+          onKeyDown={(e) => e.key === 'Enter' && handleNotify()}
+          placeholder="接口码 或 https://api.day.app/xxx/"
+          className="w-full px-4 py-3 rounded-xl border outline-none text-foreground text-sm font-mono"
+          style={{
+            background: 'hsl(210 80% 95%)',
+            borderColor: error ? 'hsl(0 84% 60%)' : 'hsl(210 70% 87%)',
+          }}
+        />
+        {error && <p className="text-xs mt-1.5" style={{ color: 'hsl(0 84% 55%)' }}>{error}</p>}
+>>>>>>> a682c5cb3cd6f789e8c557e08572281402e0f675
 
         <button
           onClick={handleNotify}
@@ -204,15 +269,26 @@ export default function HomePage() {
       >
         <p className="text-xs font-semibold text-foreground mb-2">使用说明</p>
         <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+<<<<<<< HEAD
           <li>车主创建 TG 机器人（@BotFather），获取 Bot Token</li>
           <li>车主向机器人发送任意消息，通过 @userinfobot 获取 Chat ID</li>
           <li>被堵方输入 Token 和 Chat ID，点击呼叫发送 TG 通知</li>
           <li>车主在 TG 点击"正在前往"按钮或回复消息，被堵方实时收到确认</li>
+=======
+          <li>车主安装推送 App（如 Bark），获取推送接口码或完整 URL</li>
+          <li>被堵方输入接口码或完整 URL，点击呼叫发送推送通知</li>
+          <li>车主手机收到通知后，点击链接进入确认页面</li>
+          <li>车主点击"正在前往"，被堵方实时收到确认提醒</li>
+>>>>>>> a682c5cb3cd6f789e8c557e08572281402e0f675
         </ol>
       </div>
 
       <p className="text-white/50 text-xs text-center max-w-xs animate-card-enter" style={{ animationDelay: '220ms' }}>
+<<<<<<< HEAD
         无需注册与数据库，消息全程通过 TG 机器人收发
+=======
+        无需注册，接口码即身份，安全可靠
+>>>>>>> a682c5cb3cd6f789e8c557e08572281402e0f675
       </p>
     </div>
   );

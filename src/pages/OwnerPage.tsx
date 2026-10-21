@@ -169,6 +169,25 @@ export default function OwnerPage() {
         )}
       </div>
 
+
+
+      {/* 留言提示卡片 */}
+      {!confirmed && (
+        <div
+          className="floating-card w-full max-w-sm p-5 animate-card-enter mb-4"
+          style={{ animationDelay: '150ms' }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <MessageSquare className="w-4 h-4 text-primary" />
+            <p className="text-sm font-semibold text-foreground">回复留言</p>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            直接在 Telegram 中回复通知消息，留言内容将实时显示给等待方；回复任意消息即视为确认出发。
+          </p>
+        </div>
+      )}
+
+
       {/* 导航卡片 */}
       {hasLocation && (
         <div
@@ -202,21 +221,6 @@ export default function OwnerPage() {
         </div>
       )}
 
-      {/* 留言提示卡片 */}
-      {!confirmed && (
-        <div
-          className="floating-card w-full max-w-sm p-5 animate-card-enter mb-4"
-          style={{ animationDelay: '150ms' }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <MessageSquare className="w-4 h-4 text-primary" />
-            <p className="text-sm font-semibold text-foreground">回复留言</p>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            直接在 Telegram 中回复通知消息，留言内容将实时显示给等待方；回复任意消息即视为确认出发。
-          </p>
-        </div>
-      )}
 
       {/* 确认按钮 */}
       <div
@@ -246,3 +250,5 @@ export default function OwnerPage() {
     </div>
   );
 }
+
+

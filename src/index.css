@@ -1,19 +1,17 @@
-
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
 
 /* stylelint-disable */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
-
-
-
 /* 智能挪车系统 设计系统 - 参考图驱动
    Vibe: iOS App Card UI × Gradient Sky
    蓝/紫渐变背景 + 白色大圆角浮层卡片
 */
+
+
 
 @layer base {
   :root {

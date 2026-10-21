@@ -34,6 +34,11 @@ export default function NotifyPage() {
   const [ownerMessage, setOwnerMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // 读取自定义推送 URL（URL 模式下由 HomePage 写入）
+  const customNotifyUrl = barkCode
+    ? (sessionStorage.getItem(`notifyUrl_${barkCode}`) ?? undefined)
+    : undefined;
+
   // 获取定位
   const getLocation = useCallback(() => {
     if (!navigator.geolocation) { setLocationStatus('error'); return; }
@@ -86,6 +91,7 @@ export default function NotifyPage() {
         ? `${tagStr}${message}`
         : `${tagStr}有人请您挪车，请尽快前往处理`;
 
+<<<<<<< HEAD
       // OwnerPage 链接，query 携带留言/位置详情
       const params = new URLSearchParams();
       if (message) params.set('msg', message);
@@ -106,6 +112,14 @@ export default function NotifyPage() {
         code,
         text: tgText,
         ownerUrl,
+=======
+      const { success, error: barkError } = await sendBarkNotification({
+        bark_code: barkCode,
+        title: '🚗 挪车请求',
+        body: bodyText,
+        url: ownerUrl,
+        customBaseUrl: customNotifyUrl,
+>>>>>>> a682c5cb3cd6f789e8c557e08572281402e0f675
       });
 
       if (success) {
