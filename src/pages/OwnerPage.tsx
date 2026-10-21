@@ -22,20 +22,23 @@ export default function OwnerPage() {
   const lat = searchParams.get('lat');
   const lng = searchParams.get('lng');
   const hasLocation = !!lat && !!lng;
+  // 发送时刻的 updates 基线，只统计此后的车主操作
+  const bsl = Number(searchParams.get('bsl') ?? '0') || 0;
 
   const [confirmed, setConfirmed] = useState(false);
   const [ownerMessage, setOwnerMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 轮询确认状态（TG getUpdates 派生）
+  // 轮询确认状态（仅统计通知发送后、bsl 基线之后的 TG 操作）
   useEffect(() => {
-    if (!target) return;
+    if (!target || !bsl) return;
     const poll = async () => {
       const { data } = await checkTgStatus({
         token: target.token,
         chatId: target.chatId,
         code,
+        baseline: bsl,
       });
       if (data) {
         setConfirmed(data.confirmed);
@@ -45,7 +48,7 @@ export default function OwnerPage() {
     poll();
     pollRef.current = setInterval(poll, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [target, code]);
+  }, [target, code, bsl]);
 
   // 网页确认：向车主 TG 发送引导消息，点击按钮后通知等待方
   const handleConfirm = async () => {
@@ -58,7 +61,8 @@ export default function OwnerPage() {
     });
     setConfirming(false);
     if (!success) { toast.error(`发送失败：${error}`); return; }
-    toast.success('确认消息已发送到您的 Telegram，请点击其中的按钮通知等待方');
+    setConfirmed(true);
+    toast.success('快捷回复按钮已发送到您的 Telegram，请点击其中一个通知等待方');
   };
 
   const openGaode = () => {
@@ -213,7 +217,7 @@ export default function OwnerPage() {
             <p className="text-sm font-semibold text-foreground">回复留言</p>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            直接在 Telegram 中回复通知消息，留言内容将实时显示给等待方；回复任意消息即视为确认出发。
+            在 Telegram 中点击通知消息下方的快捷按钮（🚗 正在前往 / ⏱ 等我5分钟 / ✅ 已挪好）即可确认并通知对方；直接回复文字也会作为留言展示给等待方。
           </p>
         </div>
       )}

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Bell, Loader2, AlertCircle, CheckCircle2, ArrowLeft, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { sendTgNotification, checkTgStatus } from '@/services/api';
+import { sendTgNotification, checkTgStatus, getTgBaseline } from '@/services/api';
 import { parseTgCode } from '@/types/types';
 import type { LocationInfo, QuickTag } from '@/types/types';
 
@@ -29,9 +29,10 @@ export default function NotifyPage() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // 车主状态（轮询 TG getUpdates 派生）
+  // 车主状态（轮询 TG getUpdates 派生，仅统计发送后的新消息）
   const [confirmed, setConfirmed] = useState(false);
   const [ownerMessage, setOwnerMessage] = useState<string | null>(null);
+  const [baseline, setBaseline] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 获取定位
@@ -50,14 +51,15 @@ export default function NotifyPage() {
 
   useEffect(() => { getLocation(); }, [getLocation]);
 
-  // 发送后轮询车主确认状态
+  // 发送后轮询车主确认状态（基线之后的新消息才有效）
   useEffect(() => {
-    if (!sent || !target) return;
+    if (!sent || !target || baseline === null) return;
     const poll = async () => {
       const { data } = await checkTgStatus({
         token: target.token,
         chatId: target.chatId,
         code: decodeURIComponent(barkCode ?? ''),
+        baseline,
       });
       if (data) {
         if (data.confirmed && !confirmed) toast.success('🎉 车主已确认，正在前往挪车！');
@@ -68,7 +70,7 @@ export default function NotifyPage() {
     poll();
     pollRef.current = setInterval(poll, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [sent, target, barkCode, confirmed]);
+  }, [sent, target, barkCode, baseline, confirmed]);
 
   const toggleTag = (value: string) => {
     setSelectedTags((prev) =>
@@ -86,11 +88,19 @@ export default function NotifyPage() {
         ? `${tagStr}${message}`
         : `${tagStr}有人请您挪车，请尽快前往处理`;
 
-      // OwnerPage 链接，query 携带留言/位置详情
+      // 发送前取 updates 基线：只有发送后的车主操作才计入确认
+      let bs = 0;
+      try {
+        bs = await getTgBaseline(target.token);
+      } catch { /* 基线获取失败按 0 处理 */ }
+      setBaseline(bs);
+
+      // OwnerPage 链接，query 携带留言/标签/位置详情 + 基线
       const params = new URLSearchParams();
       if (message) params.set('msg', message);
       if (selectedTags.length > 0) params.set('tags', selectedTags.join(','));
       if (location) { params.set('lat', String(location.lat)); params.set('lng', String(location.lng)); }
+      params.set('bsl', String(bs));
       const qs = params.toString();
       const ownerUrl = `${window.location.origin}/owner/${barkCode}${qs ? `?${qs}` : ''}`;
 
@@ -190,6 +200,19 @@ export default function NotifyPage() {
         </div>
       )}
 
+      {/* 车主留言（未确认时独立展示，确认后显示在横幅内） */}
+      {ownerMessage && !confirmed && (
+        <div
+          className="floating-card w-full max-w-sm px-4 py-3 flex items-start gap-2 animate-card-enter mb-4"
+        >
+          <MessageSquare className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-muted-foreground mb-0.5">车主留言</p>
+            <p className="text-sm text-foreground">{ownerMessage}</p>
+          </div>
+        </div>
+      )}
+
       {/* 留言 + 标签卡片 */}
       <div
         className="floating-card w-full max-w-sm p-5 animate-card-enter mb-4"
@@ -264,8 +287,8 @@ export default function NotifyPage() {
 
       <p className="text-white/50 text-xs text-center max-w-xs mt-4">
         {sent
-          ? '已通知车主，正在实时监听 TG 回复，车主确认或回复消息后将显示在上方'
-          : '点击后将通过 TG 机器人向车主推送通知，车主点击通知中的按钮即可确认'}
+          ? '已通知车主，正在实时监听 TG 回复；车主点击"正在前往 / 等我5分钟 / 已挪好"按钮后，此处将显示已确认'
+          : '点击后将通过 TG 机器人向车主推送通知，车主点击 TG 消息中的快捷按钮即可确认'}
       </p>
     </div>
   );
