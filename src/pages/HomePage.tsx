@@ -1,31 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, QrCode, Download, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import QRCodeDataUrl from '@/components/ui/qrcodedataurl';
-import { buildTgCode } from '@/types/types';
+import { encodeTgTarget } from '@/types/types';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const [token, setToken] = useState('');
   const [chatId, setChatId] = useState('');
   const [error, setError] = useState('');
+  // 加密后的链接码（URL 中不出现 token 明文）
+  const [encCode, setEncCode] = useState('');
 
-  const handleNotify = () => {
+  const inputValid =
+    !!token.trim() &&
+    !!chatId.trim() &&
+    /^\d+:[\w-]+$/.test(token.trim()) &&
+    /^-?\d+$/.test(chatId.trim());
+
+  // 输入合法时异步生成加密码
+  useEffect(() => {
+    if (!inputValid) { setEncCode(''); return; }
+    let alive = true;
+    encodeTgTarget(token.trim(), chatId.trim()).then((enc) => {
+      if (alive) setEncCode(enc);
+    });
+    return () => { alive = false; };
+  }, [token, chatId, inputValid]);
+
+  const handleNotify = async () => {
     const t = token.trim();
     const c = chatId.trim();
     if (!t || !c) { setError('请输入 Bot Token 和 Chat ID'); return; }
     if (!/^\d+:[\w-]+$/.test(t)) { setError('Bot Token 格式不正确（形如 123456:ABC-xxx）'); return; }
     if (!/^-?\d+$/.test(c)) { setError('Chat ID 应为数字'); return; }
     setError('');
-    navigate(`/notify/${encodeURIComponent(buildTgCode(t, c))}`);
+    const enc = await encodeTgTarget(t, c);
+    navigate(`/notify/${encodeURIComponent(enc)}`);
   };
 
-  // 二维码内容：被堵方扫码直达呼叫页
-  const qrReady = !!(token.trim() && chatId.trim()) &&
-    /^\d+:[\w-]+$/.test(token.trim()) && /^-?\d+$/.test(chatId.trim());
-  const qrText = qrReady
-    ? `${window.location.origin}/notify/${encodeURIComponent(buildTgCode(token.trim(), chatId.trim()))}`
+  // 二维码内容：被堵方扫码直达呼叫页（含加密码，不含 token 明文）
+  const qrReady = !!encCode;
+  const qrText = encCode
+    ? `${window.location.origin}/notify/${encodeURIComponent(encCode)}`
     : '';
 
   // 下载二维码为 PNG

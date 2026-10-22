@@ -1,1 +1,0 @@
-ALTER TABLE move_car_rooms ADD COLUMN IF NOT EXISTS owner_message TEXT DEFAULT '';

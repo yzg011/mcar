@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Bell, Loader2, AlertCircle, CheckCircle2, ArrowLeft, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendTgNotification, checkTgStatus, getTgBaseline } from '@/services/api';
-import { parseTgCode } from '@/types/types';
-import type { LocationInfo, QuickTag } from '@/types/types';
+import { decodeTgTarget } from '@/types/types';
+import type { LocationInfo, QuickTag, TgTarget } from '@/types/types';
 
 const QUICK_TAGS: QuickTag[] = [
   { label: '挡路', emoji: '🚧', value: '挡路' },
@@ -20,7 +20,17 @@ export default function NotifyPage() {
   const { barkCode } = useParams<{ barkCode: string }>();
   const navigate = useNavigate();
 
-  const target = barkCode ? parseTgCode(decodeURIComponent(barkCode)) : null;
+  // 链接码为加密码（不含 token 明文），异步解密还原目标
+  const enc = barkCode ? decodeURIComponent(barkCode) : '';
+  // undefined = 解析中，null = 无效
+  const [target, setTarget] = useState<TgTarget | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!enc) { setTarget(null); return; }
+    let alive = true;
+    decodeTgTarget(enc).then((t) => { if (alive) setTarget(t); });
+    return () => { alive = false; };
+  }, [enc]);
 
   const [message, setMessage] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -59,7 +69,7 @@ export default function NotifyPage() {
       const { data } = await checkTgStatus({
         token: target.token,
         chatId: target.chatId,
-        code: decodeURIComponent(barkCode ?? ''),
+        code: enc,
         baseline,
       });
       if (data) {
@@ -88,7 +98,7 @@ export default function NotifyPage() {
     if (!target || !barkCode || sending) return;
     setSending(true);
     try {
-      const code = decodeURIComponent(barkCode);
+      const code = enc;
       const tagStr = selectedTags.length > 0 ? `[${selectedTags.join('/')}] ` : '';
       const bodyText = message
         ? `${tagStr}${message}`
@@ -134,7 +144,35 @@ export default function NotifyPage() {
     }
   };
 
-  const code = barkCode ? decodeURIComponent(barkCode) : '';
+  // 链接解析中
+  if (target === undefined) {
+    return (
+      <div className="page-bg-blue flex flex-col items-center justify-center px-4 min-h-dvh">
+        <Loader2 className="w-8 h-8 animate-spin text-white/70" />
+        <p className="text-white/60 text-sm mt-3">正在解析链接…</p>
+      </div>
+    );
+  }
+
+  // 链接无效
+  if (target === null) {
+    return (
+      <div className="page-bg-blue flex flex-col items-center justify-center px-4 min-h-dvh">
+        <div className="floating-card w-full max-w-sm p-8 flex flex-col items-center gap-3 animate-card-enter">
+          <span className="text-5xl">🔍</span>
+          <h2 className="text-xl font-bold text-foreground">链接无效</h2>
+          <p className="text-sm text-muted-foreground text-center">呼叫链接不存在或已损坏</p>
+          <button
+            onClick={() => navigate('/')}
+            className="btn-gradient-primary w-full py-3 rounded-2xl text-base font-bold mt-2"
+            type="button"
+          >
+            返回首页
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-bg-blue flex flex-col items-center justify-start px-4 py-8 min-h-dvh">
@@ -150,7 +188,7 @@ export default function NotifyPage() {
         <div className="flex-1 min-w-0">
           <p className="text-white/60 text-xs">Chat ID</p>
           <p className="text-white font-mono font-semibold text-sm truncate">
-            {target ? target.chatId : code}
+            {target.chatId}
           </p>
         </div>
         {sent && (

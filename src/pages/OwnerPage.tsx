@@ -1,17 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { MapPin, CheckCircle2, Loader2, ArrowLeft, MessageSquare, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { webConfirmTg } from '@/services/api';
-import { parseTgCode } from '@/types/types';
+import { decodeTgTarget } from '@/types/types';
+import type { TgTarget } from '@/types/types';
 
 export default function OwnerPage() {
   const { barkCode } = useParams<{ barkCode: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const code = barkCode ? decodeURIComponent(barkCode) : '';
-  const target = barkCode ? parseTgCode(code) : null;
+  // 链接码为加密码（不含 token 明文），异步解密还原目标
+  const enc = barkCode ? decodeURIComponent(barkCode) : '';
+  // undefined = 解析中，null = 无效
+  const [target, setTarget] = useState<TgTarget | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!enc) { setTarget(null); return; }
+    let alive = true;
+    decodeTgTarget(enc).then((t) => { if (alive) setTarget(t); });
+    return () => { alive = false; };
+  }, [enc]);
 
   // 详情来自通知链接的 query 参数
   const msg = searchParams.get('msg') ?? '';
@@ -32,7 +42,7 @@ export default function OwnerPage() {
     const { success, error } = await webConfirmTg({
       token: target.token,
       chatId: target.chatId,
-      code,
+      code: enc,
     });
     setConfirming(false);
     if (!success) { toast.error(`发送失败：${error}`); return; }
@@ -52,6 +62,16 @@ export default function OwnerPage() {
     if (!lat || !lng) { toast.error('位置信息不可用'); return; }
     window.open(`http://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`, '_blank');
   };
+
+  // 链接解析中
+  if (target === undefined) {
+    return (
+      <div className="page-bg-purple flex flex-col items-center justify-center px-4 min-h-dvh">
+        <Loader2 className="w-8 h-8 animate-spin text-white/70" />
+        <p className="text-white/60 text-sm mt-3">正在解析链接…</p>
+      </div>
+    );
+  }
 
   if (!target) {
     return (
