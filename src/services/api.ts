@@ -101,6 +101,30 @@ export async function checkTgStatus(params: {
   }
 }
 
+// 发送 Bark 推送（可选通道）：支持官方 https://api.day.app/ 或自建服务器
+// barkUrl 形如 https://api.day.app/AbCdEf 或 https://bk.z2m.store/AbCdEf
+export async function sendBarkNotification(params: {
+  barkUrl: string;
+  title: string;
+  body: string;
+  url?: string;
+}): Promise<{ success: boolean; error: string | null }> {
+  // 自建服务器通常未配置 CORS 响应头：请求已送达并推送成功，
+  // 但浏览器拦截响应读取导致 "Failed to fetch" 被误报失败。
+  // 改用 no-cors 盲发：请求送达即 resolve（opaque 响应不读取），
+  // 仅真正的网络故障才会 reject，与实际推送结果一致。
+  try {
+    const base = params.barkUrl.replace(/\/+$/, '');
+    const t = encodeURIComponent(params.title);
+    const b = encodeURIComponent(params.body);
+    const u = params.url ? `?url=${encodeURIComponent(params.url)}` : '';
+    await fetch(`${base}/${t}/${b}${u}`, { mode: 'no-cors' });
+    return { success: true, error: null };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // 网页确认：向车主 TG 发送引导消息，车主点击快捷按钮后通知等待方
 export async function webConfirmTg(params: {
   token: string;

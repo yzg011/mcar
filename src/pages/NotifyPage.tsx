@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { MapPin, Bell, Loader2, AlertCircle, CheckCircle2, ArrowLeft, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { sendTgNotification, checkTgStatus, getTgBaseline } from '@/services/api';
+import { sendTgNotification, checkTgStatus, getTgBaseline, sendBarkNotification } from '@/services/api';
 import { decodeTgTarget } from '@/types/types';
 import type { LocationInfo, QuickTag, TgTarget } from '@/types/types';
 
@@ -19,6 +19,10 @@ const POLL_INTERVAL = 3000;
 export default function NotifyPage() {
   const { barkCode } = useParams<{ barkCode: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Bark 推送地址（明文 query，可选，TG + Bark 双通道）
+  const barkAddr = searchParams.get('bark') ?? '';
 
   // 链接码为加密码（不含 token 明文），异步解密还原目标
   const enc = barkCode ? decodeURIComponent(barkCode) : '';
@@ -136,6 +140,17 @@ export default function NotifyPage() {
       if (success) {
         setSent(true);
         toast.success('TG 通知已推送到车主手机！');
+        // Bark 双通道副发：失败仅提示，不影响 TG 主通道与状态监听
+        if (barkAddr) {
+          const r = await sendBarkNotification({
+            barkUrl: barkAddr,
+            title: '🚗 挪车请求',
+            body: bodyText,
+            url: ownerUrl,
+          });
+          if (r.success) toast.success('Bark 推送已同步发送');
+          else toast.warning(`Bark 推送失败：${r.error}`);
+        }
       } else {
         toast.error(`推送失败：${error}`);
       }

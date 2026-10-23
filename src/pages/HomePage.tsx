@@ -5,10 +5,24 @@ import { toast } from 'sonner';
 import QRCodeDataUrl from '@/components/ui/qrcodedataurl';
 import { encodeTgTarget } from '@/types/types';
 
+// 归一化 Bark 推送地址：无协议自动补 https://，非法返回空串
+function normalizeBark(input: string): string {
+  const s = input.trim();
+  if (!s) return '';
+  const withProto = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+  try {
+    const u = new URL(withProto);
+    return u.origin + (u.pathname !== '/' ? u.pathname.replace(/\/+$/, '') : '');
+  } catch {
+    return '';
+  }
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [token, setToken] = useState('');
   const [chatId, setChatId] = useState('');
+  const [barkAddr, setBarkAddr] = useState('');
   const [error, setError] = useState('');
   // 加密后的链接码（URL 中不出现 token 明文）
   const [encCode, setEncCode] = useState('');
@@ -35,15 +49,23 @@ export default function HomePage() {
     if (!t || !c) { setError('请输入 Bot Token 和 Chat ID'); return; }
     if (!/^\d+:[\w-]+$/.test(t)) { setError('Bot Token 格式不正确（形如 123456:ABC-xxx）'); return; }
     if (!/^-?\d+$/.test(c)) { setError('Chat ID 应为数字'); return; }
+    const bark = barkAddr.trim();
+    if (bark && !normalizeBark(bark)) { setError('Bark 推送地址格式不正确'); return; }
     setError('');
     const enc = await encodeTgTarget(t, c);
-    navigate(`/notify/${encodeURIComponent(enc)}`);
+    // Bark 地址明文随 query 传递（不加密），可选
+    const qs = bark ? `?bark=${encodeURIComponent(normalizeBark(bark))}` : '';
+    navigate(`/notify/${encodeURIComponent(enc)}${qs}`);
   };
 
-  // 二维码内容：被堵方扫码直达呼叫页（含加密码，不含 token 明文）
+  // 二维码内容：被堵方扫码直达呼叫页（含加密码，不含 token 明文；Bark 地址可选附带）
+  const barkQs = (() => {
+    const n = normalizeBark(barkAddr);
+    return n ? `?bark=${encodeURIComponent(n)}` : '';
+  })();
   const qrReady = !!encCode;
   const qrText = encCode
-    ? `${window.location.origin}/notify/${encodeURIComponent(encCode)}`
+    ? `${window.location.origin}/notify/${encodeURIComponent(encCode)}${barkQs}`
     : '';
 
   // 下载二维码为 PNG
@@ -139,6 +161,22 @@ export default function HomePage() {
               style={inputStyle(!!error)}
             />
           </div>
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-1.5">
+              Bark 推送地址（可选，TG + Bark 双通道）
+            </p>
+            <input
+              type="text"
+              value={barkAddr}
+              onChange={(e) => { setBarkAddr(e.target.value); setError(''); }}
+              placeholder="https://api.day.app/你的Key 或自建服务器地址"
+              className="w-full px-4 py-3 rounded-xl border outline-none text-foreground text-sm font-mono"
+              style={inputStyle(!!error)}
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              支持官方 api.day.app 和自建服务器；填写后通知会同时推送到 Bark
+            </p>
+          </div>
         </div>
         {error && <p className="text-xs mt-2" style={{ color: 'hsl(0 84% 55%)' }}>{error}</p>}
 
@@ -226,6 +264,7 @@ export default function HomePage() {
           <li>车主向机器人发送任意消息，通过 @userinfobot 获取 Chat ID</li>
           <li>被堵方输入 Token 和 Chat ID，点击呼叫发送 TG 通知</li>
           <li>车主在 TG 点击"正在前往"按钮或回复消息，被堵方实时收到确认</li>
+          <li>可选填 Bark 推送地址（官方/自建），通知将同时通过 Bark 推送一份</li>
         </ol>
       </div>
 
