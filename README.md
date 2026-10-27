@@ -1,6 +1,5 @@
-# 欢迎使用你的秒哒应用代码包
-秒哒应用链接
-    URL:https://www.miaoda.cn/projects/app-cs3s5jkj3rb5
+# 欢迎使用挪车应用
+    URL:https://mcar.z2m.store
 
 ## 介绍
 
